@@ -42,6 +42,14 @@ git_pull_directory() {
     echo "--------------------------"
     cd "$dir" || return 1
 
+    # Extract GitHub URL
+    github_url=$(git remote get-url origin 2>/dev/null)
+    if [[ -n "$github_url" ]]; then
+      echo "GitHub URL: $github_url"
+    else
+      echo "No GitHub URL found for this repository."
+    fi
+
     # Check for local changes
     if [[ "$SKIP_CLEAN_CHECK" == "false" ]]; then
       if ! git diff --quiet; then

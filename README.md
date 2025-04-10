@@ -13,6 +13,7 @@ This repository contains a bash script (`git_pull_all.sh`) that automates the pr
 - Tallies the total number of repositories processed and those with problems, displaying the counts as the final output.
 - `--stash`: Stash and apply changes during git pull.
 - `--debug`: Enable debug output for troubleshooting.
+- Extracts and displays the GitHub URL for each repository during processing.
 
 ## Sample `directories.txt` Entry
 ```
