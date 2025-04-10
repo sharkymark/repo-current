@@ -25,6 +25,11 @@ $HOME/documents/src
 
 ## Usage
 
+Before running the script, ensure it is executable:
+```
+chmod +x git_pull_all.sh
+```
+
 Run the script without stashing local changes:
 ```
 ./git_pull_all.sh
