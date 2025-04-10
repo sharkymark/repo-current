@@ -5,15 +5,18 @@ This repository contains a bash script (`git_pull_all.sh`) that automates the pr
 ## Features
 - Reads a list of directories from a configuration file (`directories.txt`).
 - Recursively scans directories for Git repositories.
+- The script skips repositories with no branch, as they are likely not linked to a remote.
 - Checks for local changes before pulling updates (can be skipped with a configuration flag).
 - Provides warnings for untracked branches or local changes.
 - Handles errors gracefully and provides detailed logs.
 - Optionally stashes and applies local changes using the `--stash` argument.
 - Automatically creates an empty `directories.txt` file if it is missing and warns the user.
 - Tallies the total number of repositories processed and those with problems, displaying the counts as the final output.
+- Extracts and displays the GitHub URL for each repository during processing.
 - `--stash`: Stash and apply changes during git pull.
 - `--debug`: Enable debug output for troubleshooting.
-- Extracts and displays the GitHub URL for each repository during processing.
+- `--convert-ssh-to-https`: Converts SSH-based Git remotes to HTTPS during processing and notifies the user.
+
 
 ## Sample `directories.txt` Entry
 ```

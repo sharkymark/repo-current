@@ -4,6 +4,7 @@ DIRECTORIES_FILE="directories.txt" # File containing the list of top-level direc
 SKIP_CLEAN_CHECK=false             # Set to true to skip checking for local changes
 STASHED=false                      # Default value for stashing changes
 debug_mode=false                   # Default value for debug mode
+convert_ssh_to_https=false         # Default value for converting SSH to HTTPS
 
 # Add a heading at the start of the program
 echo "================================"
@@ -21,6 +22,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --debug)
       debug_mode=true
+      shift
+      ;;
+    --convert-ssh-to-https)
+      convert_ssh_to_https=true
       shift
       ;;
     *)
@@ -46,8 +51,23 @@ git_pull_directory() {
     github_url=$(git remote get-url origin 2>/dev/null)
     if [[ -n "$github_url" ]]; then
       echo "GitHub URL: $github_url"
+
+      # Convert SSH to HTTPS if the flag is set
+      if [[ "$convert_ssh_to_https" == "true" && "$github_url" =~ ^git@github.com:(.*) ]]; then
+        https_url="https://github.com/${BASH_REMATCH[1]}"
+        git remote set-url origin "$https_url"
+        echo "  Converted remote URL from SSH to HTTPS: $https_url"
+      fi
     else
       echo "No GitHub URL found for this repository."
+    fi
+
+    # Check if the repository has a branch
+    current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [[ -z "$current_branch" || "$current_branch" == "HEAD" ]]; then
+      echo "  No branch found, so skipping"
+      cd - > /dev/null || return 1
+      return 0
     fi
 
     # Check for local changes
@@ -129,6 +149,10 @@ while IFS= read -r raw_directory; do
   fi
 
 done < "$DIRECTORIES_FILE"
+
+# Add two blank lines after processing the last repository for better readability
+echo
+echo
 
 # Final output
 echo "Finished processing directories."
