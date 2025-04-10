@@ -32,10 +32,60 @@ Run the script with the `--stash` argument to stash and apply local changes:
 ./git_pull_all.sh --stash
 ```
 
+## Sample Output
+
+### Successful Pull
+When the script successfully pulls updates from a repository, it displays:
+```
+Processing Git repository: /Users/markmilligan/Documents/src/v2-templates
+--------------------------
+GitHub URL: https://github.com/sharkymark/v2-templates.git
+  Performing git pull...
+Already up to date.
+  Successfully pulled changes in /Users/markmilligan/Documents/src/v2-templates.
+```
+
+### Failed Pull when local changes exist
+When the script encounters local changes, it displays:
+```
+Processing Git repository: /Users/markmilligan/Documents/src/db
+--------------------------
+GitHub URL: https://github.com/sharkymark/db.git
+  Warning: Local changes exist in /Users/markmilligan/Documents/src/db. Git pull may fail.
+  Consider committing or stashing your changes.
+```
+
+### Failed Pull due to untracked branch
+When the script encounters an untracked branch, it displays:
+```
+Processing Git repository: /Users/markmilligan/Documents/src/aider
+--------------------------
+No GitHub URL found for this repository.
+  Performing git pull...
+There is no tracking information for the current branch.
+Please specify which branch you want to rebase against.
+See git-pull(1) for details.
+
+    git pull <remote> <branch>
+
+If you wish to set tracking information for this branch you can do so with:
+
+    git branch --set-upstream-to=origin/<branch> main
+
+  Error: Failed to pull changes in /Users/markmilligan/Documents/src/aider. Check for local changes, network issues, or conflicts.
+```
+
 ## Final Output
 At the end of the script execution, the following summary is displayed:
 - Total repositories processed.
 - Total repositories with problems (e.g., failed pulls or local changes).
+
+### Example Summary
+```
+Finished processing directories.
+Total repositories processed: 33
+Total repositories with problems: 6
+```
 
 ## License
 
