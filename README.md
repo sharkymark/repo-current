@@ -15,7 +15,7 @@ This repository contains a bash script (`git_pull_all.sh`) that automates the pr
 - Extracts and displays the GitHub URL for each repository during processing.
 - `--stash`: Stash and apply changes during git pull.
 - `--debug`: Enable debug output for troubleshooting.
-- `--convert-ssh-to-https`: Converts SSH-based Git remotes to HTTPS during processing and notifies the user.
+- `--convert-ssh-to-https`: Converts SSH-based Git remotes to HTTPS during processing (for stronger security using personal access tokens).
 
 
 ## Sample `directories.txt` Entry
