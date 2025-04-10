@@ -9,6 +9,11 @@ This repository contains a bash script (`git_pull_all.sh`) that automates the pr
 - Provides warnings for untracked branches or local changes.
 - Handles errors gracefully and provides detailed logs.
 
+## Sample `directories.txt` Entry
+```
+$HOME/documents/src
+```
+
 ## License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
