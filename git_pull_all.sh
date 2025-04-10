@@ -2,14 +2,27 @@
 # --- Configuration ---
 DIRECTORIES_FILE="directories.txt" # File containing the list of top-level directories
 SKIP_CLEAN_CHECK=false             # Set to true to skip checking for local changes
-                                  # before attempting git pull (use with caution)
+STASHED=false                      # Default value for stashing changes
+
+# --- Parse Command-Line Arguments ---
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --stash)
+      STASHED=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
 
 # --- Functions ---
 
 # Function to perform git pull in a given directory
     git_pull_directory() {
       local dir="$1"
-      local STASHED=false
 
       if [[ -d "$dir" && -d "$dir/.git" ]]; then
         echo "Processing Git repository: $dir"
@@ -31,7 +44,6 @@ SKIP_CLEAN_CHECK=false             # Set to true to skip checking for local chan
           if [[ "$STASHED" == "true" ]]; then
             echo "  Applying stashed changes in $dir..."
             git stash pop --index --quiet
-            unset STASHED
           fi
         else
           if ! git rev-parse --abbrev-ref --symbolic-full-name @{u} > /dev/null 2>&1; then
