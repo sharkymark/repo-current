@@ -8,10 +8,23 @@ This repository contains a bash script (`git_pull_all.sh`) that automates the pr
 - Checks for local changes before pulling updates (can be skipped with a configuration flag).
 - Provides warnings for untracked branches or local changes.
 - Handles errors gracefully and provides detailed logs.
+- Optionally stashes and applies local changes using the `--stash` argument.
 
 ## Sample `directories.txt` Entry
 ```
 $HOME/documents/src
+```
+
+## Usage
+
+Run the script without stashing local changes:
+```
+./git_pull_all.sh
+```
+
+Run the script with the `--stash` argument to stash and apply local changes:
+```
+./git_pull_all.sh --stash
 ```
 
 ## License
