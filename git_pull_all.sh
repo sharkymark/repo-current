@@ -64,8 +64,9 @@ done
 
 # Check if the directories file exists
 if [[ ! -f "$DIRECTORIES_FILE" ]]; then
-  echo "Error: The directories file '$DIRECTORIES_FILE' does not exist."
-  echo "Please create this file and list the top-level directories you want to scan, one per line."
+  echo "Warning: The directories file '$DIRECTORIES_FILE' does not exist."
+  echo "Creating an empty '$DIRECTORIES_FILE' file. Please add directories to this file."
+  touch "$DIRECTORIES_FILE"
   exit 1
 fi
 

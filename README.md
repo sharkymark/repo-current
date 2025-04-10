@@ -9,6 +9,7 @@ This repository contains a bash script (`git_pull_all.sh`) that automates the pr
 - Provides warnings for untracked branches or local changes.
 - Handles errors gracefully and provides detailed logs.
 - Optionally stashes and applies local changes using the `--stash` argument.
+- Automatically creates an empty `directories.txt` file if it is missing and warns the user.
 
 ## Sample `directories.txt` Entry
 ```
