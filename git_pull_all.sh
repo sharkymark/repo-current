@@ -81,16 +81,15 @@ git_pull_directory() {
     fi
 
     echo "  Performing git pull..."
-    if git pull; then
+    # Modify the git pull logic to suppress "Successfully pulled changes" if the repository is already up to date
+    if git pull | grep -q "Already up to date."; then
+      echo "  Repository is already up to date."
+    else
       echo "  Successfully pulled changes in $dir."
       if [[ "$STASHED" == "true" ]]; then
         echo "  Applying stashed changes in $dir..."
         git stash pop --index --quiet
       fi
-    else
-      echo "  Error: Failed to pull changes in $dir. Check for local changes, network issues, or conflicts."
-      cd - > /dev/null || return 1
-      return 1
     fi
 
     echo
