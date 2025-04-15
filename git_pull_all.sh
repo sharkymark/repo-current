@@ -81,11 +81,15 @@ git_pull_directory() {
     fi
 
     echo "  Performing git pull..."
-    # Modify the git pull logic to suppress "Successfully pulled changes" if the repository is already up to date
-    if git pull | grep -q "Already up to date."; then
+    # Update logic to exclude untracked branches from successful pull count
+    if git pull 2>&1 | grep -q "There is no tracking information for the current branch."; then
+      echo "  Error: Untracked branch detected in $dir. Skipping."
+      repos_with_problems=$((repos_with_problems + 1))
+    elif git pull | grep -q "Already up to date."; then
       echo "  Repository is already up to date."
     else
       echo "  Successfully pulled changes in $dir."
+      repos_successfully_pulled=$((repos_successfully_pulled + 1))
       if [[ "$STASHED" == "true" ]]; then
         echo "  Applying stashed changes in $dir..."
         git stash pop --index --quiet
@@ -106,6 +110,7 @@ git_pull_directory() {
 # Initialize counters
 repos_processed=0
 repos_with_problems=0
+repos_successfully_pulled=0
 
 # Check if the directories file exists
 if [[ ! -f "$DIRECTORIES_FILE" ]]; then
@@ -156,6 +161,7 @@ echo
 # Final output
 echo "Finished processing directories."
 echo "Total repositories processed: $repos_processed"
+echo "Total repositories successfully pulled: $repos_successfully_pulled"
 echo "Total repositories with problems: $repos_with_problems"
 
 exit 0
