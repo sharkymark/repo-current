@@ -93,6 +93,7 @@ At the end of the script execution, the following summary is displayed:
 ```
 Finished processing directories.
 Total repositories processed: 33
+Total repositories successfully pulled: 3
 Total repositories with problems: 6
 ```
 
