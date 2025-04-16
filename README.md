@@ -1,102 +1,115 @@
-# Project Overview
+# Git Pull All Repositories
 
-This repository contains a bash script (`git_pull_all.sh`) that automates the process of pulling updates from remote Git repositories. It scans a list of top-level directories (specified in `directories.txt`) for Git repositories and performs a `git pull` operation in each repository.
+This script scans directories for Git repositories and pulls updates from their remotes.
 
-## Features
-- Reads a list of directories from a configuration file (`directories.txt`).
-- Recursively scans directories for Git repositories.
-- The script skips repositories with no branch, as they are likely not linked to a remote.
-- Checks for local changes before pulling updates (can be skipped with a configuration flag).
-- Provides warnings for untracked branches or local changes.
-- Handles errors gracefully and provides detailed logs.
-- Optionally stashes and applies local changes using the `--stash` argument.
-- Automatically creates an empty `directories.txt` file if it is missing and warns the user.
-- Tallies the total number of repositories processed and those with problems, displaying the counts as the final output.
-- Extracts and displays the GitHub URL for each repository during processing.
-- `--stash`: Stash and apply changes during git pull.
-- `--debug`: Enable debug output for troubleshooting.
-- `--convert-ssh-to-https`: Converts SSH-based Git remotes to HTTPS during processing (for stronger security using personal access tokens).
-- Counts and displays the number of repositories that successfully pulled changes.
+## Overview
 
+The script reads a list of directories from a file and searches for Git repositories within them. For each repository found, it performs a `git pull` operation to update the repository with the latest changes from the remote.
 
-## Sample `directories.txt` Entry
+## Setup
+
+1. Create a file named `directories.txt` in the same directory as the script.
+2. Add the directories you want to scan for Git repositories to the file, one per line.
+   * You can use environment variables like `$HOME` or `~` in the paths.
+
+Example `directories.txt`:
 ```
-$HOME/documents/src
+$HOME/Documents/src
+$HOME/projects
+~/github
 ```
 
 ## Usage
 
-Before running the script, ensure it is executable:
-```
-chmod +x git_pull_all.sh
-```
-
-Run the script without stashing local changes:
-```
-./git_pull_all.sh
+```bash
+./git_pull_all.sh [options]
 ```
 
-Run the script with the `--stash` argument to stash and apply local changes:
-```
-./git_pull_all.sh --stash
-```
+### Options
 
-## Sample Output
+- `--no-detail`, `--summary-only`: Hide individual repository processing details, only show final summary
+- `--stash`: Stash local changes before pulling and pop them after pulling
+- `--convert-ssh-to-https`: Convert SSH remote URLs to HTTPS
+- `--debug`: Show debug information
 
-### Successful Pull
-When the script successfully pulls updates from a repository, it displays:
+## Features
+
+- Automatically detects and updates all Git repositories in the specified directories
+- Shows accurate statistics about repositories processed:
+  - Total repositories processed
+  - Repositories with actual changes pulled
+  - Repositories with problems
+    - Repositories with local changes
+    - Repositories with no branch
+    - Repositories not found
+    - Repositories with other problems
+  - Repositories already up to date
+- Groups repositories by status for clearer output
+- Identifies repositories with local changes, no branches, and missing remote repositories
+- Handles SSH and HTTPS remote URLs
+
+## Example Output
+
+With default output (detailed):
 ```
-Processing Git repository: /Users/markmilligan/Documents/src/v2-templates
+Processing Git repository: /Users/user/projects/my-repo
 --------------------------
-GitHub URL: https://github.com/sharkymark/v2-templates.git
+GitHub URL: https://github.com/user/my-repo.git
   Performing git pull...
-Already up to date.
-  Successfully pulled changes in /Users/markmilligan/Documents/src/v2-templates.
-```
+  Successfully pulled changes in /Users/user/projects/my-repo.
 
-### Failed Pull when local changes exist
-When the script encounters local changes, it displays:
-```
-Processing Git repository: /Users/markmilligan/Documents/src/db
+Processing Git repository: /Users/user/projects/another-repo
 --------------------------
-GitHub URL: https://github.com/sharkymark/db.git
-  Warning: Local changes exist in /Users/markmilligan/Documents/src/db. Git pull may fail.
-  Consider committing or stashing your changes.
-```
-
-### Failed Pull due to untracked branch
-When the script encounters an untracked branch, it displays:
-```
-Processing Git repository: /Users/markmilligan/Documents/src/aider
---------------------------
-No GitHub URL found for this repository.
+GitHub URL: https://github.com/user/another-repo.git
   Performing git pull...
-There is no tracking information for the current branch.
-Please specify which branch you want to rebase against.
-See git-pull(1) for details.
+  Repository is already up to date.
 
-    git pull <remote> <branch>
+=== REPOSITORIES SUMMARY BY STATUS ===
 
-If you wish to set tracking information for this branch you can do so with:
+Successfully pulled changes (1 repositories):
+  - /Users/user/projects/my-repo: [GitHub URL: https://github.com/user/my-repo.git] - Successfully pulled changes
 
-    git branch --set-upstream-to=origin/<branch> main
+Already up to date (1 repositories):
+  - /Users/user/projects/another-repo: [GitHub URL: https://github.com/user/another-repo.git] - Already up to date
 
-  Error: Failed to pull changes in /Users/markmilligan/Documents/src/aider. Check for local changes, network issues, or conflicts.
+Repositories with local changes (1):
+  - /Users/user/projects/local-repo: [GitHub URL: https://github.com/user/local-repo.git] - Local changes exist
+
+Finished processing directories.
+Total repositories processed: 3
+Total repositories with actual changes pulled: 1
+Total repositories with problems: 1
+  - Total repositories with local changes: 1
+  - Total repositories with no branch: 0
+  - Total repositories not found: 0
+  - Total repositories with other problems: 0
+Total repositories already up to date: 1
 ```
 
-## Final Output
-At the end of the script execution, the following summary is displayed:
-- Total repositories processed.
-- Total repositories with problems (e.g., failed pulls or local changes).
-
-### Example Summary
+With summary-only mode (`--no-detail` or `--summary-only`):
 ```
 Finished processing directories.
-Total repositories processed: 33
-Total repositories successfully pulled: 3
-Total repositories with problems: 6
+Total repositories processed: 3
+Total repositories with actual changes pulled: 1
+Total repositories with problems: 1
+  - Total repositories with local changes: 1
+  - Total repositories with no branch: 0
+  - Total repositories not found: 0
+  - Total repositories with other problems: 0
+Total repositories already up to date: 1
 ```
 
-## License
+## Troubleshooting
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+- If the script doesn't find any repositories, check that the directories in `directories.txt` exist and contain Git repositories.
+- If a repository has local changes, the script will warn you and skip the pull operation. Use the `--stash` option to automatically stash and reapply changes.
+- Run with `--debug` to see more detailed information about what the script is doing.
+
+## Problem Categories
+
+The script now tracks several specific types of problems:
+
+1. **Local Changes**: Repositories with uncommitted local changes that prevent pulling.
+2. **No Branch**: Repositories with no active branch or untracked branches.
+3. **Repository Not Found**: Repositories where the remote URL no longer exists.
+4. **Other Problems**: Any other issues that prevent successful pulling.
