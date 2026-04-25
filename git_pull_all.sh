@@ -5,7 +5,8 @@ SKIP_CLEAN_CHECK=false             # Set to true to skip checking for local chan
 STASHED=false                      # Default value for stashing changes
 debug_mode=false                   # Default value for debug mode
 convert_ssh_to_https=false         # Default value for converting SSH to HTTPS
-show_details=true                  # Default value for showing repository details
+show_details=false                 # Default value for showing repository details (true only with --verbose)
+show_verbose=false                 # Show full per-repo verbose output (restores old default)
 
 # Add a heading at the start of the program
 echo "================================"
@@ -35,6 +36,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --summary-only)
       show_details=false
+      shift
+      ;;
+    --verbose|--detail)
+      show_verbose=true
+      show_details=true
       shift
       ;;
     *)
@@ -397,11 +403,73 @@ fi
 echo
 echo
 
-# Print sorted repository lists if details should be shown
+# Compact affected-only summary (default: no flag)
+if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
+  echo "=== AFFECTED REPOSITORIES ==="
+  echo
+
+  if [[ ${#actually_pulled_repos[@]} -gt 0 ]]; then
+    echo "Successfully pulled (${#actually_pulled_repos[@]}):"
+    for entry in "${actually_pulled_repos[@]}"; do
+      repo_path="${entry%%:*}"
+      repo_name=$(basename "$repo_path")
+      url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
+      [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
+      echo "  - $repo_name  $url"
+    done
+    echo
+  fi
+
+  if [[ ${#local_changes_repos[@]} -gt 0 ]]; then
+    echo "Local changes - pull skipped (${#local_changes_repos[@]}):"
+    for entry in "${local_changes_repos[@]}"; do
+      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
+      [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
+      echo "  - $repo_name  $url"
+    done
+    echo
+  fi
+
+  if [[ ${#no_branch_repos[@]} -gt 0 ]]; then
+    echo "No branch or untracked (${#no_branch_repos[@]}):"
+    for entry in "${no_branch_repos[@]}"; do
+      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
+      [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
+      echo "  - $repo_name  $url"
+    done
+    echo
+  fi
+
+  if [[ ${#repo_not_found_repos[@]} -gt 0 ]]; then
+    echo "Repository not found (${#repo_not_found_repos[@]}):"
+    for entry in "${repo_not_found_repos[@]}"; do
+      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
+      [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
+      echo "  - $repo_name  $url"
+    done
+    echo
+  fi
+
+  if [[ ${#other_problems_repos[@]} -gt 0 ]]; then
+    echo "Other problems (${#other_problems_repos[@]}):"
+    for entry in "${other_problems_repos[@]}"; do
+      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
+      [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
+      echo "  - $repo_name  $url"
+    done
+    echo
+  fi
+fi
+
+# Verbose full summary (old default, enabled with --verbose/--detail)
 if [[ "$show_details" == "true" ]]; then
   echo "=== REPOSITORIES SUMMARY BY STATUS ==="
   echo
-  
+
   if [[ ${#actually_pulled_repos[@]} -gt 0 ]]; then
     echo "Successfully pulled changes (${#actually_pulled_repos[@]} repositories):"
     for repo in "${actually_pulled_repos[@]}"; do
@@ -409,7 +477,7 @@ if [[ "$show_details" == "true" ]]; then
     done
     echo
   fi
-  
+
   if [[ ${#already_up_to_date_repos[@]} -gt 0 ]]; then
     echo "Already up to date (${#already_up_to_date_repos[@]} repositories):"
     for repo in "${already_up_to_date_repos[@]}"; do
@@ -417,7 +485,7 @@ if [[ "$show_details" == "true" ]]; then
     done
     echo
   fi
-  
+
   if [[ ${#local_changes_repos[@]} -gt 0 ]]; then
     echo "Repositories with local changes (${#local_changes_repos[@]}):"
     for repo in "${local_changes_repos[@]}"; do
@@ -425,7 +493,7 @@ if [[ "$show_details" == "true" ]]; then
     done
     echo
   fi
-  
+
   if [[ ${#no_branch_repos[@]} -gt 0 ]]; then
     echo "Repositories with no branch or untracked branch (${#no_branch_repos[@]}):"
     for repo in "${no_branch_repos[@]}"; do
@@ -433,7 +501,7 @@ if [[ "$show_details" == "true" ]]; then
     done
     echo
   fi
-  
+
   if [[ ${#repo_not_found_repos[@]} -gt 0 ]]; then
     echo "Repositories not found (${#repo_not_found_repos[@]}):"
     for repo in "${repo_not_found_repos[@]}"; do
@@ -441,7 +509,7 @@ if [[ "$show_details" == "true" ]]; then
     done
     echo
   fi
-  
+
   if [[ ${#other_problems_repos[@]} -gt 0 ]]; then
     echo "Repositories with other problems (${#other_problems_repos[@]}):"
     for repo in "${other_problems_repos[@]}"; do
@@ -462,11 +530,11 @@ echo "  - Total repositories not found: $repos_not_found"
 echo "  - Total repositories with other problems: $repos_other_problems"
 echo "Total repositories already up to date: $repos_already_up_to_date"
 
-# Show details at the end if requested
-if [[ "$show_details" == "false" && ${#repo_dirs[@]} -gt 0 ]]; then
-  echo 
-  echo "Repository processing details can be shown with: ./$(basename "$0")"
-  echo "Hide details with: ./$(basename "$0") --no-detail"
+# Show mode tips at the end
+if [[ "$show_verbose" == "false" && "$show_details" == "false" && ${#repo_dirs[@]} -gt 0 ]]; then
+  echo
+  echo "Verbose output: ./$(basename "$0") --verbose"
+  echo "Counts only:    ./$(basename "$0") --no-detail"
 fi
 
 exit 0
