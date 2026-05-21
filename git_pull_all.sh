@@ -320,12 +320,13 @@ while IFS= read -r raw_directory; do
       echo "DEBUG: Executing find command in directory: '$expanded_dir'"
     fi
 
-    # Ensure the find command output is processed correctly
-    while IFS= read -r -d $'\0' git_dir; do
+    # Find directories that contain a .git entry (i.e. repo roots) and prune
+    # at that boundary so we don't descend into nested/vendored repos such as
+    # terraform's .terraform/modules/<name>/.git.
+    while IFS= read -r -d $'\0' repo_dir; do
       if [[ "$debug_mode" == "true" ]]; then
-        echo "DEBUG: Found .git directory at $git_dir"
+        echo "DEBUG: Found repository at $repo_dir"
       fi
-      repo_dir=$(dirname "$git_dir")
       if [[ -d "$repo_dir" ]]; then
         if [[ "$debug_mode" == "true" ]]; then
           echo "DEBUG: Adding repository directory to process: $repo_dir"
@@ -337,15 +338,15 @@ while IFS= read -r raw_directory; do
           echo "DEBUG: Skipping invalid directory: $repo_dir"
         fi
       fi
-    done < <(find "$expanded_dir" -type d -name ".git" -print0)
+    done < <(find "$expanded_dir" -type d \( -exec test -e {}/.git \; \) -prune -print0)
 
-    # Add debug log if no .git directories are found
+    # Add debug log if no repositories are found
     if [[ "$debug_mode" == "true" ]]; then
-      git_dirs_count=$(find "$expanded_dir" -type d -name ".git" | wc -l)
+      git_dirs_count=$(find "$expanded_dir" -type d \( -exec test -e {}/.git \; \) -prune -print | wc -l)
       if [[ $git_dirs_count -eq 0 ]]; then
-        echo "DEBUG: No .git directories found in $expanded_dir"
+        echo "DEBUG: No repositories found in $expanded_dir"
       else
-        echo "DEBUG: Total .git directories found: $git_dirs_count"
+        echo "DEBUG: Total repositories found: $git_dirs_count"
       fi
     fi
   fi
@@ -403,6 +404,19 @@ fi
 echo
 echo
 
+# Extract the brief "why" stored in each entry's message. Entries look like
+# "<path>: [GitHub URL: ...] - <reason>" (or "<path>: Not a valid Git repository").
+# Falls back to the raw message when the "] - " marker is absent. First line
+# only, capped at 80 chars.
+extract_reason() {
+  local entry="$1"
+  local msg="${entry#*: }"
+  local reason="${msg##*] - }"
+  reason="${reason%%$'\n'*}"
+  [[ ${#reason} -gt 80 ]] && reason="${reason:0:77}..."
+  printf '%s' "$reason"
+}
+
 # Compact affected-only summary (default: no flag)
 if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
   echo "=== AFFECTED REPOSITORIES ==="
@@ -426,7 +440,7 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
       repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url"
+      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
@@ -437,7 +451,7 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
       repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url"
+      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
@@ -448,7 +462,7 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
       repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url"
+      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
@@ -459,7 +473,7 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
       repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url"
+      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
