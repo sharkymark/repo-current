@@ -1,4 +1,13 @@
 #!/bin/bash
+# Line-buffer stdout/stderr when piped (e.g. install.sh | tee) so per-repo
+# progress appears immediately instead of sitting in a full buffer for minutes.
+if [[ -z "${_GIT_PULL_ALL_LINEBUF:-}" ]] && [[ ! -t 1 ]]; then
+  if command -v stdbuf >/dev/null 2>&1; then
+    export _GIT_PULL_ALL_LINEBUF=1
+    exec stdbuf -oL -eL bash "$0" "$@"
+  fi
+fi
+
 # --- Configuration ---
 DIRECTORIES_FILE="directories.txt" # File containing the list of top-level directories
 SKIP_CLEAN_CHECK=false             # Set to true to skip checking for local changes
@@ -7,6 +16,10 @@ debug_mode=false                   # Default value for debug mode
 convert_ssh_to_https=false         # Default value for converting SSH to HTTPS
 show_details=false                 # Default value for showing repository details (true only with --verbose)
 show_verbose=false                 # Show full per-repo verbose output (restores old default)
+PROGRESS_BAR_WIDTH=10              # ASCII bar width for [####------] style progress
+PROGRESS_NAME_WIDTH=40             # Truncate/pad repo basenames in progress lines
+PROGRESS_REASON_WIDTH=80           # Max chars for one-line error reasons under progress
+LAST_PULL_REASON=""                # Set by git_pull_directory for status=error summaries
 
 # Add a heading at the start of the program
 echo "================================"
@@ -88,12 +101,119 @@ add_to_status_array() {
   esac
 }
 
+# ASCII bar from i/N, e.g. [####------]
+progress_bar() {
+  local i="$1"
+  local n="$2"
+  local width="${3:-$PROGRESS_BAR_WIDTH}"
+  local filled=0
+  if [[ "$n" -gt 0 ]]; then
+    filled=$(( (i * width) / n ))
+  fi
+  local empty=$(( width - filled ))
+  local bar=""
+  local j
+  for ((j = 0; j < filled; j++)); do
+    bar+="#"
+  done
+  for ((j = 0; j < empty; j++)); do
+    bar+="-"
+  done
+  printf '[%s]' "$bar"
+}
+
+# Short label for git_pull_directory return codes
+progress_label_for_status() {
+  case "$1" in
+    0) printf 'up-to-date' ;;
+    1) printf 'error' ;;
+    2) printf 'updated' ;;
+    3) printf 'no-branch' ;;
+    4) printf 'local-changes' ;;
+    5) printf 'not-found' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+# Truncate a repo basename for the progress column
+truncate_progress_name() {
+  local name="$1"
+  local max="${2:-$PROGRESS_NAME_WIDTH}"
+  if [[ ${#name} -gt $max ]]; then
+    printf '%s' "${name:0:$((max - 3))}..."
+  else
+    printf '%s' "$name"
+  fi
+}
+
+# Build the common prefix: [####------] [ 12/47] pulling  my-service
+format_progress_prefix() {
+  local i="$1"
+  local n="$2"
+  local name="$3"
+  local bar display
+  bar=$(progress_bar "$i" "$n")
+  display=$(truncate_progress_name "$name")
+  printf '%s [%3d/%d] pulling  %-*s' "$bar" "$i" "$n" "$PROGRESS_NAME_WIDTH" "$display"
+}
+
+# Print "in progress" line before a blocking git pull. Always ends with a
+# newline so line-buffered stdout (and stdbuf -oL through pipes/tee) flushes
+# before git pull runs — that is what makes a hung repo visible.
+print_progress_start() {
+  local i="$1"
+  local n="$2"
+  local name="$3"
+  local prefix
+  prefix=$(format_progress_prefix "$i" "$n" "$name")
+  printf '%s in-progress\n' "$prefix"
+}
+
+# Finish with a short result label on its own line (same prefix for easy scanning).
+print_progress_done() {
+  local i="$1"
+  local n="$2"
+  local name="$3"
+  local status="$4"
+  local prefix label
+  prefix=$(format_progress_prefix "$i" "$n" "$name")
+  label=$(progress_label_for_status "$status")
+  printf '%s %s\n' "$prefix" "$label"
+}
+
+# One truncated reason line under an error progress result (summary mode only).
+# Indented to sit under the "pulling" column.
+print_progress_error_reason() {
+  local reason="$1"
+  local max="${2:-$PROGRESS_REASON_WIDTH}"
+  # First line only; collapse runs of whitespace for a single clean row.
+  reason="${reason%%$'\n'*}"
+  reason="${reason//$'\r'/ }"
+  reason="${reason//$'\t'/ }"
+  while [[ "$reason" == *"  "* ]]; do
+    reason="${reason//  / }"
+  done
+  reason="${reason#"${reason%%[![:space:]]*}"}"
+  reason="${reason%"${reason##*[![:space:]]}"}"
+  [[ -z "$reason" ]] && return 0
+  if [[ ${#reason} -gt $max ]]; then
+    reason="${reason:0:$((max - 3))}..."
+  fi
+  printf '           %s\n' "$reason"
+}
+
+# Record a short reason for the most recent pull (used when status is error).
+set_last_pull_reason() {
+  LAST_PULL_REASON="$1"
+}
+
 # Function to perform git pull in a given directory
 git_pull_directory() {
   local dir="$1"
   local pull_status=0
   local details=""
   local repo_status_message=""
+  LAST_PULL_REASON=""
 
   if [[ -d "$dir" && -d "$dir/.git" ]]; then
     details+="Processing Git repository: $dir\n"
@@ -105,7 +225,10 @@ git_pull_directory() {
       echo "--------------------------"
     fi
     
-    cd "$dir" || return 1
+    if ! cd "$dir"; then
+      set_last_pull_reason "Could not enter directory: $dir"
+      return 1
+    fi
 
     # Extract GitHub URL
     github_url=$(git remote get-url origin 2>/dev/null)
@@ -218,7 +341,8 @@ git_pull_directory() {
         echo "  $pull_output"
       fi
       
-      cd - > /dev/null || return 1
+      set_last_pull_reason "$pull_output"
+      cd - > /dev/null || true
       add_to_status_array "$dir" "other-problem" "$repo_status_message - Error: $pull_output"
       return 1
     else
@@ -253,6 +377,7 @@ git_pull_directory() {
       echo "Error: '$dir' is not a valid Git repository."
     fi
     
+    set_last_pull_reason "Not a valid Git repository"
     add_to_status_array "$dir" "other-problem" "Not a valid Git repository"
     return 1
   fi
@@ -358,10 +483,24 @@ if [[ "$debug_mode" == "true" ]]; then
   echo "DEBUG: Processing ${#repo_dirs[@]} repositories"
 fi
 
+total_repos=${#repo_dirs[@]}
+if [[ "$total_repos" -gt 0 ]]; then
+  echo "Pulling $total_repos repositories..."
+  echo
+fi
+
 for repo_dir in "${repo_dirs[@]}"; do
   repos_processed=$((repos_processed + 1))
+  repo_basename=$(basename "$repo_dir")
+  print_progress_start "$repos_processed" "$total_repos" "$repo_basename"
   git_pull_directory "$repo_dir"
   pull_status=$?
+  print_progress_done "$repos_processed" "$total_repos" "$repo_basename" "$pull_status"
+  # In summary mode, surface one truncated reason under error results so you
+  # don't need --verbose just to see why a pull failed.
+  if [[ "$pull_status" -eq 1 && "$show_details" == "false" && -n "$LAST_PULL_REASON" ]]; then
+    print_progress_error_reason "$LAST_PULL_REASON"
+  fi
   
   case $pull_status in
     0)
