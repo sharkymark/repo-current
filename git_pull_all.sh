@@ -556,6 +556,16 @@ extract_reason() {
   printf '%s' "$reason"
 }
 
+# Collapse $HOME prefix to ~ so affected-repo lines stay scannable.
+display_repo_path() {
+  local path="$1"
+  if [[ -n "$HOME" && "$path" == "$HOME"/* ]]; then
+    printf '~%s' "${path#"$HOME"}"
+  else
+    printf '%s' "$path"
+  fi
+}
+
 # Compact affected-only summary (default: no flag)
 if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
   echo "=== AFFECTED REPOSITORIES ==="
@@ -565,10 +575,10 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
     echo "Successfully pulled (${#actually_pulled_repos[@]}):"
     for entry in "${actually_pulled_repos[@]}"; do
       repo_path="${entry%%:*}"
-      repo_name=$(basename "$repo_path")
+      display_path=$(display_repo_path "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url"
+      echo "  - $display_path  $url"
     done
     echo
   fi
@@ -576,10 +586,11 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
   if [[ ${#local_changes_repos[@]} -gt 0 ]]; then
     echo "Local changes - pull skipped (${#local_changes_repos[@]}):"
     for entry in "${local_changes_repos[@]}"; do
-      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      repo_path="${entry%%:*}"
+      display_path=$(display_repo_path "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
+      echo "  - $display_path  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
@@ -587,10 +598,11 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
   if [[ ${#no_branch_repos[@]} -gt 0 ]]; then
     echo "No branch or untracked (${#no_branch_repos[@]}):"
     for entry in "${no_branch_repos[@]}"; do
-      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      repo_path="${entry%%:*}"
+      display_path=$(display_repo_path "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
+      echo "  - $display_path  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
@@ -598,10 +610,11 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
   if [[ ${#repo_not_found_repos[@]} -gt 0 ]]; then
     echo "Repository not found (${#repo_not_found_repos[@]}):"
     for entry in "${repo_not_found_repos[@]}"; do
-      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      repo_path="${entry%%:*}"
+      display_path=$(display_repo_path "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
+      echo "  - $display_path  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
@@ -609,10 +622,11 @@ if [[ "$show_verbose" == "false" && "$show_details" == "false" ]]; then
   if [[ ${#other_problems_repos[@]} -gt 0 ]]; then
     echo "Other problems (${#other_problems_repos[@]}):"
     for entry in "${other_problems_repos[@]}"; do
-      repo_path="${entry%%:*}"; repo_name=$(basename "$repo_path")
+      repo_path="${entry%%:*}"
+      display_path=$(display_repo_path "$repo_path")
       url=$(echo "$entry" | grep -oE 'https?://[^[:space:]]+' | sed 's/]$//' | head -1)
       [[ -z "$url" ]] && url=$(echo "$entry" | grep -oE 'git@[^[:space:]]+' | sed 's/]$//' | head -1)
-      echo "  - $repo_name  $url  ($(extract_reason "$entry"))"
+      echo "  - $display_path  $url  ($(extract_reason "$entry"))"
     done
     echo
   fi
