@@ -72,6 +72,7 @@ declare -a local_changes_repos=()
 declare -a no_branch_repos=()
 declare -a repo_not_found_repos=()
 declare -a other_problems_repos=()
+declare -a skipped_worktree_repos=()
 
 # Function to add repo to the appropriate array with its message
 add_to_status_array() {
@@ -97,6 +98,9 @@ add_to_status_array() {
       ;;
     "other-problem")
       other_problems_repos+=("$repo: $message")
+      ;;
+    "skipped-worktree")
+      skipped_worktree_repos+=("$repo: $message")
       ;;
   esac
 }
@@ -131,6 +135,7 @@ progress_label_for_status() {
     3) printf 'no-branch' ;;
     4) printf 'local-changes' ;;
     5) printf 'not-found' ;;
+    6) printf 'skipped-worktree' ;;
     *) printf 'unknown' ;;
   esac
 }
@@ -214,6 +219,17 @@ git_pull_directory() {
   local details=""
   local repo_status_message=""
   LAST_PULL_REASON=""
+
+  # Linked worktrees use a .git file (gitdir: ...); skip them — do not auto-pull WIP trees.
+  if [[ -d "$dir" && -f "$dir/.git" ]]; then
+    details+="Skipping linked worktree: $dir\n"
+    if [[ "$show_details" == "true" ]]; then
+      echo "Skipping linked worktree: $dir"
+    fi
+    set_last_pull_reason "Skipped linked worktree"
+    add_to_status_array "$dir" "skipped-worktree" "Skipped linked worktree"
+    return 6
+  fi
 
   if [[ -d "$dir" && -d "$dir/.git" ]]; then
     details+="Processing Git repository: $dir\n"
@@ -394,6 +410,7 @@ repos_local_changes=0
 repos_no_branch=0
 repos_not_found=0
 repos_other_problems=0
+repos_skipped_worktrees=0
 
 # Store repo paths to process them outside the find subshell
 declare -a repo_dirs
@@ -453,6 +470,14 @@ while IFS= read -r raw_directory; do
         echo "DEBUG: Found repository at $repo_dir"
       fi
       if [[ -d "$repo_dir" ]]; then
+        # Linked worktrees have a .git file, not a .git directory — skip them.
+        if [[ -f "$repo_dir/.git" ]]; then
+          if [[ "$debug_mode" == "true" ]]; then
+            echo "DEBUG: Skipping linked worktree: $repo_dir"
+          fi
+          skipped_worktree_repos+=("$repo_dir: Skipped linked worktree")
+          continue
+        fi
         if [[ "$debug_mode" == "true" ]]; then
           echo "DEBUG: Adding repository directory to process: $repo_dir"
         fi
@@ -481,6 +506,11 @@ done < "$DIRECTORIES_FILE"
 # Process all repositories outside the subshell
 if [[ "$debug_mode" == "true" ]]; then
   echo "DEBUG: Processing ${#repo_dirs[@]} repositories"
+fi
+
+repos_skipped_worktrees=${#skipped_worktree_repos[@]}
+if [[ "$repos_skipped_worktrees" -gt 0 ]]; then
+  echo "Skipping $repos_skipped_worktrees linked worktree(s) (not primary clones)."
 fi
 
 total_repos=${#repo_dirs[@]}
@@ -530,6 +560,10 @@ for repo_dir in "${repo_dirs[@]}"; do
       # Repository not found
       repos_with_problems=$((repos_with_problems + 1))
       repos_not_found=$((repos_not_found + 1))
+      ;;
+    6)
+      # Linked worktree skipped (defense in depth if one reaches the pull loop)
+      repos_skipped_worktrees=$((repos_skipped_worktrees + 1))
       ;;
   esac
 done
@@ -695,6 +729,7 @@ echo "  - Total repositories with local changes: $repos_local_changes"
 echo "  - Total repositories with no branch: $repos_no_branch"
 echo "  - Total repositories not found: $repos_not_found"
 echo "  - Total repositories with other problems: $repos_other_problems"
+echo "Total linked worktrees skipped: $repos_skipped_worktrees"
 echo "Total repositories already up to date: $repos_already_up_to_date"
 
 # Show mode tips at the end
