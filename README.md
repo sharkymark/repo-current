@@ -38,6 +38,8 @@ $HOME/projects
 ## Features
 
 - Automatically detects and updates all Git repositories in the specified directories
+- When the only local changes are unstaged or untracked `package-lock.json` files, saves copies under `.git/lockfile-backups/` and continues pulling. Backups include the original files, Git status, commit ID, and a patch; their location is printed during the update. Old lockfiles are never automatically reapplied.
+- Leaves repositories with source edits or staged changes untouched, including staged lockfile changes.
 - Always-on progress: `[####------] [ 12/47] pulling  my-service ................. up-to-date`
 - Shows accurate statistics about repositories processed:
   - Total repositories processed
@@ -113,7 +115,7 @@ Finished processing directories.
 ## Troubleshooting
 
 - If the script doesn't find any repositories, check that the directories in `directories.txt` exist and contain Git repositories.
-- If a repository has local changes, the script will warn you and skip the pull operation. Use the `--stash` option to automatically stash and reapply changes.
+- Lockfile-only changes are backed up automatically before pulling. The backups remain available even if pulling fails. Repositories with other local changes or staged work are skipped.
 - Run with `--debug` to see more detailed information about what the script is doing.
 - If progress seems stuck on one repo name, that pull is still running (network/auth); the next line appears when it finishes.
 

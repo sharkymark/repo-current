@@ -212,12 +212,87 @@ set_last_pull_reason() {
   LAST_PULL_REASON="$1"
 }
 
+# Archive incidental npm lockfile edits before pulling. Return 4 for source or
+# staged changes so the caller keeps the normal local-changes skip behavior.
+archive_npm_lockfiles() {
+  local changes="$1"
+  local entry path git_dir backup_dir current_changes
+  local -a lockfiles=()
+
+  while IFS= read -r entry; do
+    case "${entry:0:2}" in
+      " M"|"??") ;;
+      *) return 4 ;;
+    esac
+    path="${entry:3}"
+    case "$path" in
+      package-lock.json|*/package-lock.json) ;;
+      *) return 4 ;;
+    esac
+    # Quoted/special paths, deletions, and symlinks are left for manual review.
+    if [[ ! -f "$path" || -L "$path" ]]; then
+      return 4
+    fi
+    lockfiles+=("$path")
+  done <<< "$changes"
+
+  if ! git_dir=$(git rev-parse --absolute-git-dir) ||
+     ! mkdir -p "$git_dir/lockfile-backups" ||
+     ! backup_dir=$(mktemp -d "$git_dir/lockfile-backups/$(date +%Y%m%d-%H%M%S).XXXXXX"); then
+    set_last_pull_reason "Could not create lockfile backup; pull skipped"
+    return 1
+  fi
+
+  # Finish every backup before clearing any local file.
+  for path in "${lockfiles[@]}"; do
+    if ! mkdir -p "$backup_dir/files/$(dirname "$path")" ||
+       ! cp -p "$path" "$backup_dir/files/$path"; then
+      set_last_pull_reason "Could not save lockfile backup at $backup_dir; pull skipped"
+      return 1
+    fi
+  done
+  if ! printf '%s\n' "$changes" > "$backup_dir/status.txt" ||
+     ! git rev-parse HEAD > "$backup_dir/head.txt" ||
+     ! git --literal-pathspecs diff --binary -- "${lockfiles[@]}" > "$backup_dir/changes.patch"; then
+    set_last_pull_reason "Could not finish lockfile backup at $backup_dir; pull skipped"
+    return 1
+  fi
+
+  # A developer or another process may have edited files during the backup.
+  if ! current_changes=$(git status --porcelain=v1 --untracked-files=all) ||
+     [[ "$current_changes" != "$changes" ]]; then
+    set_last_pull_reason "Local changes changed during lockfile backup; pull skipped"
+    return 1
+  fi
+  for path in "${lockfiles[@]}"; do
+    if ! cmp -s "$path" "$backup_dir/files/$path"; then
+      set_last_pull_reason "Lockfile changed during backup; pull skipped"
+      return 1
+    fi
+  done
+
+  printf '  Lockfile changes saved to %s\n' "$backup_dir"
+  for path in "${lockfiles[@]}"; do
+    if git --literal-pathspecs ls-files --error-unmatch -- "$path" > /dev/null 2>&1; then
+      if ! git --literal-pathspecs restore --worktree -- "$path"; then
+        set_last_pull_reason "Could not clear lockfile edit; backup at $backup_dir"
+        return 1
+      fi
+    elif ! rm -- "$path"; then
+      set_last_pull_reason "Could not clear untracked lockfile; backup at $backup_dir"
+      return 1
+    fi
+  done
+  return 0
+}
+
 # Function to perform git pull in a given directory
 git_pull_directory() {
   local dir="$1"
   local pull_status=0
   local details=""
   local repo_status_message=""
+  local local_changes cleanup_status
   LAST_PULL_REASON=""
 
   # Linked worktrees use a .git file (gitdir: ...); skip them — do not auto-pull WIP trees.
@@ -291,7 +366,27 @@ git_pull_directory() {
 
     # Check for local changes
     if [[ "$SKIP_CLEAN_CHECK" == "false" ]]; then
-      if ! git diff --quiet; then
+      if ! local_changes=$(git status --porcelain=v1 --untracked-files=all); then
+        set_last_pull_reason "Could not inspect local changes; pull skipped"
+        cd - > /dev/null || true
+        add_to_status_array "$dir" "other-problem" "$repo_status_message - $LAST_PULL_REASON"
+        return 1
+      fi
+      if [[ -n "$local_changes" ]]; then
+        if archive_npm_lockfiles "$local_changes"; then
+          cleanup_status=0
+        else
+          cleanup_status=$?
+        fi
+        if [[ "$cleanup_status" -eq 1 ]]; then
+          cd - > /dev/null || true
+          add_to_status_array "$dir" "other-problem" "$repo_status_message - $LAST_PULL_REASON"
+          return 1
+        fi
+      else
+        cleanup_status=0
+      fi
+      if [[ "$cleanup_status" -eq 4 ]]; then
         details+="  Warning: Local changes exist in $dir. Git pull may fail.\n"
         details+="  Consider committing or stashing your changes.\n"
         
